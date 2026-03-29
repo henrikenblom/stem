@@ -1,0 +1,37 @@
+.define CLKL 1
+.define CLKH 1
+.define PUBLIC CLKDIV CLKL + 1 + CLKH + 1
+
+.program stem_master
+.side_set 1
+
+tx_loop:
+    out pins, 8        side 0 [CLKL]
+    jmp X-- tx_loop    side 1 [CLKH]
+
+    mov osr, null      side 0 [CLKL]
+    out pindirs, 8     side 0 [CLKL]    ; release bus for response
+
+    wait 0 pin 0       side 0 [CLKL]    ; D0 LOW = slave response ready
+    jmp pin ack        side 0 [CLKL]    ; D1 HIGH = ACK
+    irq nowait 2       side 0 [CLKL]    ; flag NACK
+    jmp skip_rx        side 0 [CLKL]
+
+ack:
+    mov X, Y           side 0 [CLKL]
+    jmp !X skip_rx     side 0 [CLKL]
+    nop                side 0 [CLKL]    ; wait for slave TX setup
+    nop                side 1 [CLKH]    ; prime CLK
+
+rx_loop:
+    in pins, 8         side 0 [CLKL]
+    jmp X-- rx_loop    side 1 [CLKH]
+
+    push noblock       side 0 [CLKL]
+skip_rx:
+    mov osr, ~null     side 0 [CLKL]
+    out pindirs, 8     side 0 [CLKL]
+
+.wrap_target
+    irq wait 0         side 0 [CLKL]
+.wrap

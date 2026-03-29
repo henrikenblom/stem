@@ -1,0 +1,41 @@
+.program stem_slave_rx
+
+start:
+    nop                              ; patched: wait 0 gpio CS_PIN
+.wrap_target
+rx_loop:
+    nop                              ; patched: wait 1 gpio CLK_PIN
+    in pins, 8
+    nop                              ; patched: wait 0 gpio CLK_PIN
+    jmp Y-- no_push
+    push noblock
+    set Y, 3
+no_push:
+    jmp X-- rx_loop
+    push noblock
+    irq wait 0
+.wrap
+
+.program stem_slave_tx
+
+    mov pins, ~null                  ; all pin outputs HIGH (prevents false D0 LOW)
+    mov osr, ~null                   ; 0xFFFFFFFF
+    out pindirs, 8                   ; all data pins output (D0 is HIGH)
+    out null, 24                     ; drain OSR, trigger autopull
+
+    set pindirs, 3                   ; D0,D1 output
+    nop                              ; patched: set pins READY_ACK or READY_NACK
+    nop [31]                         ; hold signal for master to sample
+
+tx_loop:
+    out pins, 8
+    nop                              ; patched: wait 1 gpio CLK_PIN
+    nop                              ; patched: wait 0 gpio CLK_PIN
+    jmp X-- tx_loop
+
+    mov osr, null
+    out pindirs, 8                   ; data pins input (release bus)
+    set pindirs, 0                   ; D0,D1 input (release signal)
+.wrap_target
+    irq wait 1
+.wrap
